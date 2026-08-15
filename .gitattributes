@@ -1,0 +1,4 @@
+# Fim de linha LF em todo o kit, independente do sistema de quem clonar.
+# Os .sql são montados dentro de um container Linux; manter LF evita que a
+# máquina do candidato mude o conteúdo que o Postgres vai executar.
+* text=auto eol=lf

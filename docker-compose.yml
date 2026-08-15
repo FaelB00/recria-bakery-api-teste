@@ -1,0 +1,48 @@
+# =============================================================================
+# Teste técnico Backend — banco de dados local
+#
+# Sobe um PostgreSQL 18 e aplica sozinho tudo que estiver em ./sql, em ordem
+# alfabética (01_schema.sql, depois 02_seed.sql, depois qualquer arquivo que
+# você criar, como 03_indexes.sql).
+#
+#   docker compose up -d          sobe
+#   docker compose logs postgres  vê o log da carga inicial
+#   docker compose down -v        derruba E APAGA o volume (recarrega tudo do zero)
+#
+# ATENÇÃO: os arquivos de ./sql só rodam quando o volume está vazio. Se você
+# criar o 03_indexes.sql depois de já ter subido o banco, rode `docker compose
+# down -v && docker compose up -d` para ele ser aplicado.
+#
+# A porta exposta é a 5434 (não a 5432) para não conflitar com um Postgres que
+# você já tenha na máquina.
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: bakery-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bakery
+      POSTGRES_PASSWORD: bakery
+      POSTGRES_DB: bakery
+      # Fixado em UTC de propósito, para o banco se comportar igual na máquina
+      # de todo mundo — inclusive na nossa, quando formos avaliar.
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "5434:5432"
+    volumes:
+      - ./sql:/docker-entrypoint-initdb.d:ro
+      # A partir do Postgres 18 a imagem oficial espera o volume montado em
+      # /var/lib/postgresql (e não em /var/lib/postgresql/data como nas versões
+      # anteriores). Montar no caminho antigo faz o container morrer no boot.
+      - bakery_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bakery -d bakery"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  bakery_pgdata:
