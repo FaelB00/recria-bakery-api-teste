@@ -324,7 +324,3 @@ retorno; falhas de infraestrutura inesperadas são capturadas por um handler glo
 ```
 
 ---
-
-## Decisões de design
-
-As decisões e trade-offs relevantes estão documentados em [`DECISIONS.md`](./DECISIONS.md).
