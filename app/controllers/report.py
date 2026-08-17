@@ -13,7 +13,7 @@ from app.services.report_service import ReportService
 router = APIRouter(prefix="/v1/reports", tags=["reports"])
 
 
-@router.get("/ingredients")
+@router.get("/ingredients", response_model=None)
 async def get_ingredient_report(
     from_: datetime = Query(alias="from"),
     to: datetime = Query(),

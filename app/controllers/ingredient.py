@@ -17,7 +17,7 @@ from app.services.ingredient_service import IngredientService
 router = APIRouter(prefix="/v1/ingredients", tags=["ingredients"])
 
 
-@router.get("")
+@router.get("", response_model=None)
 async def list_ingredients(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -34,7 +34,7 @@ async def list_ingredients(
     return ok(response)
 
 
-@router.get("/{ingredient_id}")
+@router.get("/{ingredient_id}", response_model=None)
 async def get_ingredient(
     ingredient_id: uuid.UUID,
     store_code: str = Depends(get_store_code),
@@ -46,7 +46,7 @@ async def get_ingredient(
     return ok(IngredientResponseDTO.model_validate(result))
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=None)
 async def create_ingredient(
     body: IngredientCreateDTO,
     store_code: str = Depends(get_store_code),

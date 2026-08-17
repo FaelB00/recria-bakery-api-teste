@@ -18,7 +18,7 @@ from app.services.supplier_service import SupplierService
 router = APIRouter(prefix="/v1/suppliers", tags=["suppliers"])
 
 
-@router.get("")
+@router.get("", response_model=None)
 async def list_suppliers(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -35,7 +35,7 @@ async def list_suppliers(
     return ok(response)
 
 
-@router.get("/{supplier_id}")
+@router.get("/{supplier_id}", response_model=None)
 async def get_supplier(
     supplier_id: uuid.UUID,
     store_code: str = Depends(get_store_code),
@@ -47,7 +47,7 @@ async def get_supplier(
     return ok(SupplierResponseDTO.model_validate(result))
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=None)
 async def create_supplier(
     body: SupplierCreateDTO,
     store_code: str = Depends(get_store_code),
@@ -59,7 +59,7 @@ async def create_supplier(
     return created(SupplierResponseDTO.model_validate(result))
 
 
-@router.patch("/{supplier_id}")
+@router.patch("/{supplier_id}", response_model=None)
 async def update_supplier(
     supplier_id: uuid.UUID,
     body: SupplierUpdateDTO,
@@ -72,7 +72,7 @@ async def update_supplier(
     return ok(SupplierResponseDTO.model_validate(result))
 
 
-@router.delete("/{supplier_id}", status_code=204)
+@router.delete("/{supplier_id}", status_code=204, response_model=None)
 async def delete_supplier(
     supplier_id: uuid.UUID,
     store_code: str = Depends(get_store_code),
