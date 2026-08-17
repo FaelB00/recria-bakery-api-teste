@@ -1,5 +1,6 @@
 from datetime import datetime
-
+from typing import Any
+from fastapi.responses import JSONResponse
 from fastapi import APIRouter, Depends, Query
 
 from app.dtos.common import PaginationMetaDTO
@@ -20,7 +21,7 @@ async def get_ingredient_report(
     page_size: int = Query(default=20, ge=1, le=100),
     store_code: str = Depends(get_store_code),
     service: ReportService = Depends(get_report_service),
-):
+) -> dict[str, Any] | JSONResponse:
     result = await service.get_ingredient_report(store_code, from_, to, page, page_size)
     if isinstance(result, BusinessError):
         return error_response(result)

@@ -1,9 +1,14 @@
 import uuid
-
+from typing import Any
+from fastapi.responses import JSONResponse
 from fastapi import APIRouter, Depends, Query
 
 from app.dtos.common import PaginationMetaDTO
-from app.dtos.ingredient import IngredientCreateDTO, IngredientListResponseDTO, IngredientResponseDTO
+from app.dtos.ingredient import (
+    IngredientCreateDTO,
+    IngredientListResponseDTO,
+    IngredientResponseDTO,
+)
 from app.infra.dependencies import get_ingredient_service, get_store_code
 from app.infra.response import created, error_response, ok
 from app.services.errors import BusinessError
@@ -20,7 +25,7 @@ async def list_ingredients(
     supplier_id: uuid.UUID | None = Query(default=None),
     store_code: str = Depends(get_store_code),
     service: IngredientService = Depends(get_ingredient_service),
-):
+) -> dict[str, Any] | JSONResponse:
     items, total = await service.list_ingredients(store_code, page, page_size, search, supplier_id)
     response = IngredientListResponseDTO(
         items=[IngredientResponseDTO.model_validate(item) for item in items],
@@ -34,7 +39,7 @@ async def get_ingredient(
     ingredient_id: uuid.UUID,
     store_code: str = Depends(get_store_code),
     service: IngredientService = Depends(get_ingredient_service),
-):
+) -> dict[str, Any] | JSONResponse:
     result = await service.get_ingredient(ingredient_id, store_code)
     if isinstance(result, BusinessError):
         return error_response(result)
@@ -46,7 +51,7 @@ async def create_ingredient(
     body: IngredientCreateDTO,
     store_code: str = Depends(get_store_code),
     service: IngredientService = Depends(get_ingredient_service),
-):
+) -> dict[str, Any] | JSONResponse:
     result = await service.create_ingredient(store_code, body)
     if isinstance(result, BusinessError):
         return error_response(result)

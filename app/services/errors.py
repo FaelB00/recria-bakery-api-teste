@@ -1,7 +1,8 @@
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
-class ErrorCode(str, Enum):
+
+class ErrorCode(StrEnum):
     NOT_FOUND = "NOT_FOUND"
     CONFLICT = "CONFLICT"
     UNPROCESSABLE = "UNPROCESSABLE"

@@ -1,3 +1,4 @@
+from typing import Any
 from fastapi import status
 from fastapi.responses import JSONResponse
 from app.services.errors import BusinessError, ErrorCode
@@ -5,15 +6,15 @@ from app.services.errors import BusinessError, ErrorCode
 _STATUS_BY_CODE = {
     ErrorCode.NOT_FOUND: status.HTTP_404_NOT_FOUND,
     ErrorCode.CONFLICT: status.HTTP_409_CONFLICT,
-    ErrorCode.UNPROCESSABLE: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    ErrorCode.UNPROCESSABLE: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
-def ok(data) -> dict:
+def ok(data: Any) -> dict[str, Any]:
     return {"data": data, "message": "OK"}
 
 
-def created(data) -> dict:
+def created(data: Any) -> dict[str, Any]:
     return {"data": data, "message": "Created"}
 
 

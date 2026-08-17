@@ -8,4 +8,4 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
 
-settings = Settings()
+settings = Settings() # type: ignore[call-arg]

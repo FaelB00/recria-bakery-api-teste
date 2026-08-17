@@ -1,12 +1,11 @@
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.infra.dependencies import get_supplier_service
 from app.main import app
 from app.services.errors import BusinessError, ErrorCode
 from app.services.supplier_service import SupplierService
-
 
 # ---------------------------------------------------------------------------
 # Teste 1 — erro de negócio devolvido pelo service vira 404 na resposta HTTP
@@ -85,7 +84,7 @@ class _FakeSupplierRow:
     updated_at: datetime = None
 
     def __post_init__(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         self.created_at = self.created_at or now
         self.updated_at = self.updated_at or now
 

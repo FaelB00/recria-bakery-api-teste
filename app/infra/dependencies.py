@@ -4,13 +4,12 @@ from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.database import get_db_session
-from app.repositories.supplier_repository import SupplierRepository
-from app.services.supplier_service import SupplierService
 from app.repositories.ingredient_repository import IngredientRepository
-from app.services.ingredient_service import IngredientService
-
 from app.repositories.report_repository import ReportRepository
+from app.repositories.supplier_repository import SupplierRepository
+from app.services.ingredient_service import IngredientService
 from app.services.report_service import ReportService
+from app.services.supplier_service import SupplierService
 
 STORE_CODE_PATTERN = re.compile(r"^\d{8}$")
 
