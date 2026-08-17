@@ -2,6 +2,8 @@ import uuid
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.dtos.common import PaginationMetaDTO
+
 
 class SupplierCreateDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -27,12 +29,6 @@ class SupplierResponseDTO(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-
-
-class PaginationMetaDTO(BaseModel):
-    page: int
-    page_size: int
-    total: int
 
 
 class SupplierListResponseDTO(BaseModel):

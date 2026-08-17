@@ -3,14 +3,16 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.controllers import health, supplier
+from app.controllers import health, ingredient, supplier
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Bakery API")
+app = FastAPI(title="Bakery API - Teste Rafael")
+
 
 app.include_router(health.router)
 app.include_router(supplier.router)
+app.include_router(ingredient.router)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
