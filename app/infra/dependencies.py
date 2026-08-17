@@ -9,6 +9,9 @@ from app.services.supplier_service import SupplierService
 from app.repositories.ingredient_repository import IngredientRepository
 from app.services.ingredient_service import IngredientService
 
+from app.repositories.report_repository import ReportRepository
+from app.services.report_service import ReportService
+
 STORE_CODE_PATTERN = re.compile(r"^\d{8}$")
 
 
@@ -34,3 +37,13 @@ def get_ingredient_service(
     repository: IngredientRepository = Depends(get_ingredient_repository),
 ) -> IngredientService:
     return IngredientService(repository)
+
+
+def get_report_repository(session: AsyncSession = Depends(get_db_session)) -> ReportRepository:
+    return ReportRepository(session)
+
+
+def get_report_service(
+    repository: ReportRepository = Depends(get_report_repository),
+) -> ReportService:
+    return ReportService(repository)
