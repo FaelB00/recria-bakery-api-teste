@@ -1,242 +1,94 @@
-# Teste técnico — Backend
+# Bakery API - Teste Rafael Bernardes
 
-Olá! Este teste existe para conversarmos sobre código de verdade, não sobre quebra-cabeças.
-O problema abaixo é uma versão reduzida de coisas que a gente resolve toda semana: uma API
-multi-loja, com dinheiro e estoque envolvidos, onde errar tem consequência.
+Este é o resultado de um teste técnico preparado pela recria.ia, que consiste na implementação de uma API REST para gestão de fornecedores(suppliers) e insumos(ingredients) de uma rede de padarias multi-loja, com isolamento total de dados entre lojas.
 
-**Leia este README inteiro antes de começar.** Ele foi escrito como um roteiro: o Bloco A é
-guiado passo a passo, e cada passo tem um critério de aceite para você saber que terminou.
-
-> Este roteiro diz **o que** entregar e **como verificar** que ficou pronto.
-> Ele não diz **como** implementar — as decisões de implementação são suas,
-> e é exatamente isso que estamos avaliando.
+Stack: Python 3.11+, FastAPI, SQLAlchemy 2.0 (async, via `asyncpg`), Pydantic v2, PostgreSQL 18, Docker.
 
 ---
 
-## 1. Regras do jogo
+## Como subir o projeto
 
-| | |
-|---|---|
-| **Prazo** | 3 dias corridos a partir do recebimento deste kit |
-| **Esforço esperado** | 4 a 6 horas. Se estourar muito, pare e escreva no `DECISIONS.md` onde parou e por quê — isso conta a favor, não contra |
-| **Stack obrigatória** | Python 3.11+, FastAPI, SQLAlchemy 2.0 **async** (com `asyncpg`), Pydantic v2, PostgreSQL, Docker |
-| **Entrega** | Repositório Git (link público ou `.zip` com a pasta `.git` dentro) |
-| **Uso de IA** | Liberado. Usamos IA aqui todos os dias. Mas a entrevista é sobre **o seu** código: você vai precisar explicar e defender cada decisão. Código que você não sabe justificar conta contra |
+### Pré-requisitos
 
-**O que NÃO avaliamos** — não gaste tempo com isso:
+- Python 3.11 ou superior
+- Docker e Docker Compose
+- Git
 
-- Front-end de qualquer tipo
-- Autenticação de verdade (login, JWT, hash de senha). A identidade da loja vem de um header simples, descrito no Passo 3
-- Deploy, CI, cloud
-- Cobertura de testes alta. Queremos poucos testes bons, não muitos testes rasos
-
----
-
-## 2. O domínio
-
-Uma rede de padarias com várias lojas. Cada loja compra insumos (farinha, manteiga, ovos) de
-fornecedores, recebe as mercadorias, e consome esses insumos na produção do dia a dia.
-
-Três coisas que valem entender antes de codar:
-
-**Loja é o limite de tudo.** Cada loja tem um código de 8 dígitos (`store_code`). Fornecedor,
-insumo, pedido e movimento de estoque pertencem a exatamente uma loja. Uma loja jamais pode ver
-ou alterar dado de outra.
-
-**Embalagem não é unidade.** A padaria compra em embalagem (uma caixa, um saco) mas controla
-estoque em unidade base (kg, litro, unidade). Cada insumo tem um `units_per_package` que diz
-quantas unidades base vêm em uma embalagem. Uma caixa de farinha com `units_per_package = 3`
-entrega 3 kg de estoque.
-
-**Estoque tem duas representações.** `ingredients.computed_stock` é o saldo atual — rápido de
-ler. `stock_movements` é o livro-razão: toda entrada e toda saída vira uma linha lá. O saldo é
-uma conveniência; o razão é a verdade.
-
-A operação das padarias acontece em **America/Sao_Paulo**.
-
----
-
-## 3. O banco que você recebe
-
-Você **não** modela o banco: ele já vem pronto. O que você constrói é a API inteira por cima dele.
+### 1. Clonar e configurar variáveis de ambiente
 
 ```bash
+git clone <url-deste-repositorio>
+cd test_backend_developer
 cp .env.example .env
+```
+
+### 2. Subir o banco de dados
+
+```bash
 docker compose up -d
 docker compose logs postgres
 ```
 
-No meio do log, procure a linha `seed ok`. Ela tem que dizer exatamente isto:
+No log, confirme que aparece a linha:
 
 ```
 seed ok | lojas=2 fornecedores=12 insumos=30 pedidos=4 movimentos=10410 menor_saldo=1614.500
 ```
 
-Conexão: `postgresql://bakery:bakery@localhost:5434/bakery`, schema `bakery`.
+O Postgres fica exposto em `localhost:5434` (banco `bakery`, schema `bakery`), para não
+conflitar com uma instalação local na porta padrão 5432.
 
-### As 5 tabelas
+### 3. Criar o ambiente virtual e instalar dependências
 
-| Tabela | O que guarda |
-|---|---|
-| `suppliers` | Fornecedores da loja |
-| `ingredients` | Insumos, com `units_per_package`, `computed_stock` e `average_cost` |
-| `purchase_orders` | Pedidos de compra (cabeçalho), com `status` |
-| `purchase_order_items` | Itens do pedido |
-| `stock_movements` | Livro-razão: `CONSUMPTION`, `WASTE`, `ORDER_RECEIPT`, `ADJUSTMENT` |
-
-Abra o `sql/01_schema.sql` e leia com atenção — ele está comentado. Repare em duas coisas:
-
-1. A chave primária é **composta**: `(id, store_code)`. E as chaves estrangeiras carregam o
-   `store_code` junto. Entenda o que isso significa antes de escrever o primeiro model.
-2. **Não existe índice além dos que vêm de `PRIMARY KEY` e `UNIQUE`.** Isso é de propósito. Se
-   você precisar de mais algum, crie o arquivo `sql/03_indexes.sql`.
-
-**As duas lojas do seed são `10000001` e `10000002`.** Não edite `01_schema.sql` nem
-`02_seed.sql` — avaliamos contra exatamente esses dados.
-
----
-
-## 4. BLOCO A — obrigatório
-
-Sete passos. Faça na ordem; cada um constrói em cima do anterior.
-
-### Passo 0 — Ambiente
-
-Suba o banco (seção 3) e confirme que consegue consultar as tabelas.
-
-> **Aceite:** `docker compose up -d` sobe sem erro e a linha `seed ok` aparece no log.
-
----
-
-### Passo 1 — Esqueleto e camadas
-
-Crie o projeto com esta estrutura. Os nomes das pastas são obrigatórios — é assim que nosso
-projeto real é organizado, e queremos ver você trabalhando nesse formato.
-
-```
-app/
-├── main.py                 # cria o app FastAPI e registra as rotas
-├── controllers/            # rotas HTTP (routers do FastAPI)
-├── services/               # regra de negócio
-├── repositories/           # acesso a banco
-├── models/                 # models SQLAlchemy (mapeamento das tabelas)
-├── dtos/                   # schemas Pydantic de entrada e saída
-└── infra/
-    ├── config.py           # leitura de variáveis de ambiente
-    ├── database.py         # engine e sessão async
-    ├── dependencies.py     # montagem das dependências (Depends)
-    └── response.py         # envelope de resposta e catálogo de erros
-tests/
+```bash
+python -m venv .venv
 ```
 
-O contrato entre as camadas é rígido. **Isto é o coração do teste:**
+Ativar o ambiente virtual:
 
-| Camada | Pode / deve | **Não pode** |
-|---|---|---|
-| **Controller** | Ler path, query, header e body; chamar **exatamente um** método de service; devolver a resposta usando os helpers do `response.py` | Ter `try`/`except`. Montar o envelope na mão. Importar SQLAlchemy. Conter regra de negócio |
-| **Service** | Validar regra de negócio; orquestrar um ou mais repositories; decidir qual erro de negócio devolver | Importar FastAPI (`Request`, `HTTPException`, `Depends`). Escrever SQL ou usar a sessão do SQLAlchemy diretamente |
-| **Repository** | Todo e qualquer acesso ao banco | Conter regra de negócio. Receber ou devolver DTO Pydantic (trabalhe com models e tipos simples) |
-| **DTO** | Formato de entrada e de saída, validação de formato | Ser a mesma classe do model SQLAlchemy |
-| **Model** | Mapeamento das tabelas | Acessar o banco |
+```bash
+# Windows (cmd)
+.venv\Scripts\activate.bat
 
-Uma dependência só enxerga a camada imediatamente abaixo: controller → service → repository → model.
-As dependências são montadas por funções no `infra/dependencies.py` e injetadas com `Depends`.
+# Windows (PowerShell)
+.venv\Scripts\activate
 
-Crie também um `GET /health` que responda `{"status": "ok"}`.
-
-> **Aceite:** `GET /health` devolve 200. A estrutura de pastas existe e cada arquivo está na
-> camada certa.
-
----
-
-### Passo 2 — Envelope de resposta e erros
-
-**Toda** resposta da API, com sucesso ou com erro, tem o mesmo formato de dois campos:
-
-```jsonc
-// 200 — recurso
-{ "data": { "id": "…", "name": "Moinho Aurora" }, "message": "OK" }
-
-// 200 — listagem paginada
-{ "data": { "items": [ … ], "meta": { "page": 1, "page_size": 20, "total": 137 } },
-  "message": "OK" }
-
-// 201 — criação
-{ "data": { … }, "message": "Created" }
-
-// 204 — remoção: sem corpo nenhum
-
-// 404, 409, 422 — erro
-{ "data": null, "message": "Supplier 'a1b2' não encontrado" }
+# Linux/Mac
+source .venv/bin/activate
 ```
 
-Catálogo fechado de erros de negócio. Use exatamente estes status:
+Instalar as dependências:
 
-| Situação | HTTP |
-|---|---|
-| Recurso não existe, ou existe mas não é desta loja | `404` |
-| Violação de unicidade (ex.: telefone repetido na mesma loja) | `409` |
-| Regra de negócio violada | `422` |
-| Corpo da requisição malformado ou com campo desconhecido | `422` |
+```bash
+pip install -r requirements.txt
+```
 
-Duas regras sobre como esses erros trafegam pelo código:
+### 4. Rodar a API
 
-1. **Erro de negócio é valor de retorno do service, não exceção.** O service devolve ou o
-   resultado, ou um objeto de erro. O controller recebe e traduz para HTTP.
-2. **Por consequência: o controller não tem `try`/`except`.** Nenhum. Se você sentir vontade de
-   escrever um, é sinal de que a responsabilidade está na camada errada.
+```bash
+uvicorn app.main:app --reload
+```
 
-Exceção continua existindo para falha de **infraestrutura** (banco fora do ar, bug não previsto).
-Isso é tratado uma única vez, num handler global registrado no `main.py`, que devolve `500` no
-mesmo envelope — e não em cada rota.
+A API sobe em `http://localhost:8000`. Documentação interativa (Swagger) disponível em
+`http://localhost:8000/docs`.
 
-Requisições com campo desconhecido no corpo devem ser **rejeitadas com 422**, não ignoradas.
-
-> **Aceite:** um endpoint de sucesso devolve `{"data": …, "message": "OK"}`; um erro devolve
-> `{"data": null, "message": "…"}` com o status certo; nenhum controller tem `try`/`except`;
-> mandar `{"nome_errado": 1}` num POST resulta em 422.
+Alternativamente, todos os comandos acima (exceto o clone) têm um atalho no `Makefile`:
+`make up`, `make install`, `make run` — veja `make help` para a lista completa.
 
 ---
 
-### Passo 3 — Identidade da loja
+## Como testar manualmente
 
-Toda rota (menos `/health`) exige o header **`X-Store-Code`**, com 8 dígitos numéricos.
-É ele que diz de qual loja é a requisição.
+Todo endpoint de negócio exige o header `X-Store-Code` (8 dígitos numéricos), que identifica
+a loja fazendo a requisição.
 
-- Header ausente → `422`
-- Header fora do formato (`abc`, `123`, `123456789`) → `422`
+### Health check
 
-> **Aceite:** `curl localhost:8000/v1/suppliers` sem o header devolve 422;
-> com `-H "X-Store-Code: 10000001"` devolve a lista da loja 1;
-> com `-H "X-Store-Code: 10000002"` devolve a lista da loja 2, e elas são diferentes.
+```bash
+curl http://localhost:8000/health
+```
 
----
-
-### Passo 4 — CRUD de fornecedores
-
-Prefixo `/v1`.
-
-| Método | Rota | Corpo | Sucesso | Erros |
-|---|---|---|---|---|
-| `GET` | `/v1/suppliers` | — | `200` + listagem paginada | — |
-| `GET` | `/v1/suppliers/{id}` | — | `200` | `404` |
-| `POST` | `/v1/suppliers` | `{ "name", "contact_phone" }` | `201` | `409`, `422` |
-| `PATCH` | `/v1/suppliers/{id}` | qualquer subconjunto de `{ "name", "contact_phone", "is_active" }` | `200` | `404`, `409`, `422` |
-| `DELETE` | `/v1/suppliers/{id}` | — | `204` | `404` |
-
-Detalhes que fazem parte do aceite:
-
-- **Query params do `GET` da lista:** `page` (padrão `1`), `page_size` (padrão `20`, máximo `100`),
-  `search` e `is_active` (padrão `true`).
-- **`search`** casa com parte do nome, sem diferenciar maiúsculas de minúsculas.
-- **`DELETE` é lógico:** marca `is_active = false`. A linha continua no banco. Um fornecedor
-  inativo some da listagem padrão e reaparece com `?is_active=false`.
-- **`contact_phone` é gravado só com dígitos.** O front manda mascarado
-  (`"+55 (11) 90000-0001"`); a API grava `"5511900000001"`. Duas máscaras diferentes do mesmo
-  número são o mesmo telefone e a segunda tem que dar `409`.
-- **A resposta nunca devolve `store_code`.** É informação interna.
-
-Exemplo completo:
+### Criar um fornecedor
 
 ```bash
 curl -X POST localhost:8000/v1/suppliers \
@@ -245,134 +97,234 @@ curl -X POST localhost:8000/v1/suppliers \
   -d '{"name": "Moinho Novo", "contact_phone": "+55 (11) 90000-0099"}'
 ```
 
-```json
-{
-  "data": {
-    "id": "3f1c…",
-    "name": "Moinho Novo",
-    "contact_phone": "5511900000099",
-    "is_active": true,
-    "created_at": "2026-08-14T12:00:00Z",
-    "updated_at": "2026-08-14T12:00:00Z"
-  },
-  "message": "Created"
-}
+### Listar fornecedores da loja
+
+```bash
+curl localhost:8000/v1/suppliers -H "X-Store-Code: 10000001"
 ```
 
-> **Aceite:** cada linha da tabela acima funciona; criar dois fornecedores com o mesmo telefone
-> na mesma loja dá `409`; buscar pelo `id` de um fornecedor da outra loja dá `404`.
+### Criar um insumo (com fornecedor opcional)
+
+```bash
+curl -X POST localhost:8000/v1/ingredients \
+  -H "X-Store-Code: 10000001" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Farinha de Trigo", "measure_unit": "KG", "units_per_package": 3}'
+```
+
+> No Windows, use aspas duplas escapadas com `\"` no lugar das aspas simples acima
+> (ex.: `-d "{\"name\": \"Farinha de Trigo\", ...}"`), tanto no `cmd` quanto no PowerShell.
 
 ---
 
-### Passo 5 — Insumos
+## Como rodar os testes automatizados
 
-Três endpoints, o suficiente para exercitar a relação com fornecedores.
+Os testes rodam sem necessidade de banco de dados — as dependências de banco são substituídas
+por dublês (fakes/stubs) via `app.dependency_overrides` do FastAPI.
 
-| Método | Rota | Corpo | Sucesso | Erros |
-|---|---|---|---|---|
-| `GET` | `/v1/ingredients` | — | `200` + listagem paginada | — |
-| `GET` | `/v1/ingredients/{id}` | — | `200` | `404` |
-| `POST` | `/v1/ingredients` | `{ "name", "measure_unit", "units_per_package", "default_supplier_id"? }` | `201` | `404`, `409`, `422` |
+```bash
+pytest -v
+```
 
-- **Query params do `GET` da lista:** `page`, `page_size`, `search` (parte do nome) e
-  `supplier_id` (filtra pelo fornecedor padrão).
-- **`measure_unit`** só aceita `KG`, `UN` ou `L`.
-- **`units_per_package`** tem que ser maior que zero.
-- **Regra de negócio:** se `default_supplier_id` vier preenchido, ele tem que ser um fornecedor
-  **desta loja**. Um id que não existe e um id que existe mas é de outra loja devem produzir a
-  **mesma** resposta: `404`.
-- **A resposta traz `computed_stock` e `average_cost`.**
-
-> **Aceite:** criar um insumo apontando para
-> `default_supplier_id = "22222222-0000-4000-8000-000000000001"` (fornecedor da loja 2) com o
-> header da loja `10000001` devolve `404` — e não `500`.
+São 3 testes, cada um cobrindo uma camada diferente da aplicação (tradução de erro de negócio
+para HTTP, validação de entrada, isolamento entre lojas). Veja o docstring de cada teste em
+`tests/test_supplier_api.py` para o raciocínio completo por trás de cada um.
 
 ---
 
-### Passo 6 — Testes
+## Bloco B — opcionais implementados
 
-Três testes. **Não queremos mais que isso** — queremos estes três bem feitos.
+Dos itens opcionais do Bloco B, foram implementados **D3** (relatório analítico) e **D7**
+(empacotamento e qualidade de código). Os demais foram descartados — motivo detalhado em
+[`DECISIONS.md`](./DECISIONS.md).
 
-1. Um erro de negócio devolvido pelo service vira `404` na resposta HTTP.
-2. Um `POST` com campo desconhecido no corpo é rejeitado com `422`.
-3. A loja `10000002` não consegue ler nem alterar um recurso da loja `10000001`.
+### D3 — Relatório analítico de insumos
 
-Regra da casa, e ela vale nota: **cada teste declara, no docstring, qual classe de bug ele pega
-que os outros dois não pegam.** Se você não conseguir escrever essa frase, o teste provavelmente
-é redundante.
+`GET /v1/reports/ingredients?from=&to=` devolve, por insumo, o total recebido, consumido,
+desperdiçado, o último custo unitário praticado no período e o saldo atual — paginado, e
+escrito em SQL puro (`text()` com parâmetros vinculados) em `app/repositories/report_repository.py`,
+não montado com o ORM.
 
-Os testes têm que rodar sem banco de dados — troque as dependências por dublês.
+```bash
+curl "localhost:8000/v1/reports/ingredients?from=2020-01-01T00:00:00&to=2030-01-01T00:00:00" \
+  -H "X-Store-Code: 10000001"
+```
 
-> **Aceite:** `pytest` roda verde a partir de um clone limpo, seguindo só o seu README,
-> **sem o Postgres no ar**.
+Um `from` posterior ao `to` é rejeitado com `422`.
+
+#### Índices e EXPLAIN (ANALYZE, BUFFERS)
+
+Os índices usados pela query estão em [`sql/03_indexes.sql`](./sql/03_indexes.sql), cada um
+comentado com a justificativa. Resumo do ganho medido:
+
+| Métrica | Antes | Depois |
+|---|---|---|
+| Buffers totais | 2779 | 204 (187 hit + 17 read) |
+| Buffers só da subquery de `last_unit_cost` | 2621 (~94% do custo) | 49 |
+| Execution Time | 26,6 ms | 5,79 ms |
+| Plano da subquery | `Seq Scan` (10.104 linhas descartadas por execução, 17x) | `Index Scan` usando `idx_stock_movements_ingredient_store_moved_at` |
+
+<details>
+<summary>EXPLAIN completo — antes dos índices</summary>
+
+```
+Limit  (cost=399.49..5845.76 rows=15 width=162) (actual time=6.545..26.324 rows=17.00 loops=1)
+  Buffers: shared hit=2779
+  ->  Result  (cost=399.49..5845.76 rows=15 width=162) (actual time=6.544..26.317 rows=17.00 loops=1)
+        Buffers: shared hit=2779
+        ->  Sort  (cost=399.49..399.53 rows=15 width=144) (actual time=5.074..5.081 rows=17.00 loops=1)
+              Sort Key: i.name
+              Sort Method: quicksort  Memory: 27kB
+              Buffers: shared hit=158
+              ->  HashAggregate  (cost=398.86..399.20 rows=15 width=144) (actual time=4.995..5.007 rows=17.00 loops=1)
+                    Group Key: i.name
+                    Batches: 1  Memory Usage: 40kB
+                    Buffers: shared hit=155
+                    ->  Hash Right Join  (cost=1.56..353.32 rows=2602 width=65) (actual time=0.076..3.176 rows=5207.00 loops=1)
+                          Hash Cond: (sm.ingredient_id = i.id)
+                          Buffers: shared hit=155
+                          ->  Seq Scan on stock_movements sm  (cost=0.00..336.18 rows=5204 width=42) (actual time=0.008..1.949 rows=5205.00 loops=1)
+                                Filter: ((moved_at >= '2020-01-01 00:00:00+00') AND (moved_at <= '2030-01-01 00:00:00+00') AND (store_code = '10000001'))
+                                Rows Removed by Filter: 5205
+                                Buffers: shared hit=154
+                          ->  Hash  (cost=1.38..1.38 rows=15 width=48) (actual time=0.041..0.041 rows=17.00 loops=1)
+                                Buckets: 1024  Batches: 1  Memory Usage: 10kB
+                                Buffers: shared hit=1
+                                ->  Seq Scan on ingredients i  (cost=0.00..1.38 rows=15 width=48) (actual time=0.020..0.023 rows=17.00 loops=1)
+                                      Filter: (store_code = '10000001')
+                                      Rows Removed by Filter: 15
+                                      Buffers: shared hit=1
+        SubPlan 1
+          ->  Limit  (cost=363.07..363.07 rows=1 width=14) (actual time=1.246..1.246 rows=0.88 loops=17)
+                Buffers: shared hit=2621
+                ->  Sort  (cost=363.07..363.50 rows=173 width=14) (actual time=1.234..1.234 rows=0.88 loops=17)
+                      Sort Key: sm2.moved_at DESC
+                      Sort Method: top-N heapsort  Memory: 25kB
+                      Buffers: shared hit=2621
+                      ->  Seq Scan on stock_movements sm2  (cost=0.00..362.20 rows=173 width=14) (actual time=0.149..1.172 rows=306.18 loops=17)
+                            Filter: ((moved_at >= '2020-01-01 00:00:00+00') AND (moved_at <= '2030-01-01 00:00:00+00') AND (ingredient_id = i.id) AND (store_code = i.store_code))
+                            Rows Removed by Filter: 10104
+                            Buffers: shared hit=2618
+Planning:
+  Buffers: shared hit=244
+Planning Time: 3.261 ms
+Execution Time: 26.608 ms
+```
+
+</details>
+
+<details>
+<summary>EXPLAIN completo — depois dos índices</summary>
+
+```
+Limit  (cost=399.49..443.56 rows=15 width=162) (actual time=5.109..5.558 rows=17.00 loops=1)
+  Buffers: shared hit=187 read=17
+  ->  Result  (cost=399.49..443.56 rows=15 width=162) (actual time=5.108..5.553 rows=17.00 loops=1)
+        Buffers: shared hit=187 read=17
+        ->  Sort  (cost=399.49..399.53 rows=15 width=144) (actual time=4.962..4.968 rows=17.00 loops=1)
+              Sort Key: i.name
+              Sort Method: quicksort  Memory: 27kB
+              Buffers: shared hit=155
+              ->  HashAggregate  (cost=398.86..399.20 rows=15 width=144) (actual time=4.911..4.924 rows=17.00 loops=1)
+                    Group Key: i.name
+                    Batches: 1  Memory Usage: 40kB
+                    Buffers: shared hit=155
+                    ->  Hash Right Join  (cost=1.56..353.32 rows=2602 width=65) (actual time=0.135..3.050 rows=5207.00 loops=1)
+                          Hash Cond: (sm.ingredient_id = i.id)
+                          Buffers: shared hit=155
+                          ->  Seq Scan on stock_movements sm  (cost=0.00..336.18 rows=5204 width=42) (actual time=0.044..1.824 rows=5205.00 loops=1)
+                                Filter: ((moved_at >= '2020-01-01 00:00:00+00') AND (moved_at <= '2030-01-01 00:00:00+00') AND (store_code = '10000001'))
+                                Rows Removed by Filter: 5205
+                                Buffers: shared hit=154
+                          ->  Hash  (cost=1.38..1.38 rows=15 width=48) (actual time=0.060..0.061 rows=17.00 loops=1)
+                                Buckets: 1024  Batches: 1  Memory Usage: 10kB
+                                Buffers: shared hit=1
+                                ->  Seq Scan on ingredients i  (cost=0.00..1.38 rows=15 width=48) (actual time=0.019..0.024 rows=17.00 loops=1)
+                                      Filter: (store_code = '10000001')
+                                      Rows Removed by Filter: 15
+                                      Buffers: shared hit=1
+        SubPlan 1
+          ->  Limit  (cost=0.29..2.92 rows=1 width=14) (actual time=0.033..0.033 rows=0.88 loops=17)
+                Buffers: shared hit=32 read=17
+                ->  Index Scan using idx_stock_movements_ingredient_store_moved_at on stock_movements sm2  (cost=0.29..456.30 rows=173 width=14) (actual time=0.032..0.032 rows=0.88 loops=17)
+                      Index Cond: ((ingredient_id = i.id) AND (store_code = i.store_code) AND (moved_at >= '2020-01-01 00:00:00+00') AND (moved_at <= '2030-01-01 00:00:00+00'))
+                      Index Searches: 17
+                      Buffers: shared hit=32 read=17
+Planning:
+  Buffers: shared hit=42 read=2
+Planning Time: 7.226 ms
+Execution Time: 5.791 ms
+```
+
+</details>
+
+Nota: o segundo índice (`idx_stock_movements_store_moved_at`, para o `JOIN` principal) não foi
+usado pelo planner nesse cenário — a faixa filtrada cobre ~metade da tabela, e nesse caso o
+`Seq Scan` é mais barato que o índice. Mantido para lojas/períodos mais seletivos, onde compensa.
+
+### D7 — Empacotamento e qualidade de código
+
+- **`ruff`** (linter) e **`mypy`** (checagem de tipos) configurados em `pyproject.toml`, rodando limpos.
+- **`Makefile`** com atalhos para os comandos do dia a dia (`make help` lista todos).
+- **`Dockerfile`** multi-stage (build enxuto, sem ferramentas de compilação na imagem final) rodando como usuário não-root (`appuser`).
+
+```bash
+make lint       # ruff check .
+make typecheck  # mypy app
+make check      # lint + typecheck + test, em sequência
+```
+
+Build e execução via Docker:
+
+```bash
+docker build -t bakery-api .
+
+# a API precisa estar na mesma rede do Postgres do docker-compose:
+docker network ls   # confirme o nome, ex.: test_backend_developer_default
+
+docker run --rm -p 8000:8000 \
+  --network test_backend_developer_default \
+  -e DB_URL=postgresql+asyncpg://bakery:bakery@postgres:5432/bakery \
+  bakery-api
+
+# confirma que não roda como root:
+docker exec <container_id> whoami   # esperado: appuser
+```
 
 ---
 
-### Passo 7 — Documentação
+## Estrutura do projeto
 
-- **`README.md`** — como subir e como testar. Alguém que nunca viu seu projeto tem que conseguir
-  em 5 minutos.
-- **`DECISIONS.md`** — responda as 4 perguntas do arquivo `DECISIONS.md` que veio neste kit.
-  Máximo 1 página no total. **Este arquivo pesa na avaliação tanto quanto um item do Bloco B.**
-- **Commits** — queremos ver o histórico. Vários commits pequenos com mensagem descritiva
-  (usamos [Conventional Commits](https://www.conventionalcommits.org/pt-br/)), não um commit
-  único chamado "projeto".
+```
+app/
+├── controllers/    # Rotas HTTP. Sem lógica de negócio, sem acesso a banco.
+├── services/        # Regra de negócio. Erros de negócio são retornados como valor
+│                    # (BusinessError), nunca lançados como exceção.
+├── repositories/    # Acesso ao banco via SQLAlchemy async. Sem regra de negócio.
+├── models/          # Mapeamento das tabelas (SQLAlchemy).
+├── dtos/             # Contratos de entrada/saída da API (Pydantic).
+└── infra/            # Configuração, sessão de banco, envelope de resposta,
+                       # injeção de dependências (Depends).
+tests/                # Testes automatizados (sem banco real).
+sql/                  # Schema, seed e índices do banco (03_indexes.sql é o único
+                       # arquivo criado por nós; 01 e 02 vieram prontos no kit).
+Dockerfile            # Build multi-stage, usuário não-root (D7).
+Makefile              # Atalhos para os comandos do dia a dia (D7).
+pyproject.toml        # Configuração do ruff e do mypy (D7).
+```
 
-> **Aceite:** clonamos, seguimos seu README, e funciona.
+Cada requisição segue sempre o mesmo caminho: **controller → service → repository → banco**,
+nunca pulando camada. Erros de negócio esperados (não encontrado, duplicado) são valores de
+retorno; falhas de infraestrutura inesperadas são capturadas por um handler global em
+`app/main.py`, que garante que toda resposta — sucesso ou erro — segue o mesmo formato:
 
----
-
-## 5. BLOCO B — opcional
-
-Aqui o roteiro acaba de propósito. Cada item abaixo diz **o objetivo** e **como verificamos** —
-o caminho é problema seu.
-
-> **Prefira 2 opcionais bem feitos e testados a 5 pela metade.**
-> Bloco A malfeito com muitos opcionais pontua **menos** que Bloco A impecável e nenhum opcional.
-> O que você não fizer, escreva no `DECISIONS.md` como faria.
-
-| # | Objetivo | Como verificamos | Peso |
-|---|---|---|---|
-| **D1** | **Recebimento de mercadoria.** `POST /v1/orders/{id}/actions/receive` recebe as quantidades que chegaram de fato, item a item. Para cada item: registra o quanto veio, compara com o que foi pedido e classifica como `OK` ou `DIVERGENT`; credita o estoque do insumo; registra uma linha `ORDER_RECEIPT` no livro-razão. Ao final o pedido vira `RECEIVED` | Recebemos o pedido `cccccccc-0000-4000-8000-000000000001` da loja `10000001` e conferimos `computed_stock`, `stock_movements` e `purchase_order_items` no banco. Também mandamos um item inválido no meio da lista e conferimos que **nada** foi gravado | ★★★ |
-| **D2** | **Recebimento à prova de repetição e de corrida.** O mesmo recebimento enviado duas vezes, e dois recebimentos disparados ao mesmo tempo, não podem produzir um saldo errado | Chamamos o endpoint duas vezes com o mesmo corpo e conferimos o saldo. Depois disparamos duas chamadas concorrentes. Queremos ver também o teste que **você** escreveu para isso | ★★★ |
-| **D3** | **Relatório analítico.** `GET /v1/reports/ingredients?from=&to=` devolve, por insumo no período: total recebido, total consumido, total desperdiçado, último custo unitário praticado e saldo atual. Paginado. **Escrito em SQL** (`text()` com parâmetros vinculados), não montado com o ORM. Entregue junto o `EXPLAIN (ANALYZE, BUFFERS)` antes e depois dos seus índices, e um `sql/03_indexes.sql` com **um comentário justificando cada índice** | Rodamos `?from=2026-03-01&to=2026-03-05` e conferimos os números contra uma consulta nossa. Lemos os planos de execução e a sua justificativa | ★★★ |
-| **D4** | **Ciclo de vida do pedido.** `POST /v1/orders` cria em `DRAFT` com itens (cada item é pedido **ou** em embalagens **ou** em unidades, nunca nos dois). `POST /v1/orders/{id}/actions/place` leva de `DRAFT` para `PLACED`. Transição inválida é erro de negócio com `409` — não pode chegar como erro do banco | Tentamos dar `place` num pedido já `PLACED` e esperamos `409` com o envelope normal. Mandamos um item com as duas quantidades preenchidas e esperamos `422` | ★★ |
-| **D5** | **Testes contra Postgres de verdade.** Um script ou fixture que sobe um banco descartável, aplica o schema do zero e roda os testes que precisam de banco — separados dos testes do Passo 6 | Rodamos seu comando numa máquina limpa | ★★ |
-| **D6** | **Exatidão de valores e de períodos.** Os totais em dinheiro batem centavo a centavo, e um relatório de `2026-03-01` a `2026-03-05` devolve exatamente os movimentos que a padaria registrou nesses cinco dias — nem um a mais, nem um a menos | Conferimos contra os valores reais do seed, incluindo os movimentos das bordas do intervalo | ★★ |
-| **D7** | **Empacotamento.** `Dockerfile` da API (multi-stage, rodando como usuário não-root), atalho para os comandos do dia a dia (`make` ou equivalente), `ruff` e `mypy` configurados e passando limpo | Buildamos a imagem e rodamos seus comandos | ★ |
-| **D8** | **Contrato de API.** OpenAPI com exemplos de corpo, respostas de erro documentadas por rota, e rota versionada | Abrimos o `/docs` e comparamos com o comportamento real | ★ |
+```json
+{ "data": { ... }, "message": "OK" }
+{ "data": null, "message": "Fornecedor 'x' não encontrado" }
+```
 
 ---
 
-## 6. O que entregar
+## Decisões de design
 
-1. Repositório Git com histórico de commits
-2. `README.md` — como subir, como rodar os testes
-3. `DECISIONS.md` — as 4 perguntas respondidas
-4. Se fez D3: o `EXPLAIN` e o `sql/03_indexes.sql`
-
----
-
-## 7. Como avaliamos
-
-Transparência total sobre o peso:
-
-| | Pontos |
-|---|---|
-| **Bloco A — obrigatório** | **60** |
-| ↳ Disciplina de camadas e injeção de dependências | 18 |
-| ↳ Contrato da API e tratamento de erro | 12 |
-| ↳ Isolamento entre lojas | 12 |
-| ↳ `DECISIONS.md` | 10 |
-| ↳ Os três testes | 8 |
-| **Bloco B — opcional** (teto de 40) | **40** |
-
-Uma observação honesta: **o Bloco B só entra na conta se o Bloco A estiver sólido.** O roteiro do
-Bloco A é detalhado justamente para que ele não seja o problema — dá para fazer bem feito em
-umas 3 horas.
-
-E o que a gente mais olha não está em nenhuma tabela: se o código está no lugar certo, se os
-nomes dizem o que as coisas são, e se você consegue explicar por que fez de um jeito e não de
-outro. É por isso que o `DECISIONS.md` vale tanto.
-
-Boa sorte. Qualquer dúvida sobre o enunciado, pergunte — perguntar não desconta nada.
+As decisões e trade-offs relevantes estão documentados em [`DECISIONS.md`](./DECISIONS.md).
